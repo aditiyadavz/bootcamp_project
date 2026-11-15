@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "portal-demo",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server/demo.js"],
+      "port": 5000
+    }
+  ]
+}
