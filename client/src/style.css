@@ -623,3 +623,11 @@ a.person:hover strong { color: var(--brand); }
 td:nth-child(2) { white-space: nowrap; }
 .public-main:has(> .auth) { display: grid; place-items: center; }
 .public-main:has(> .auth) .auth { width: 100%; }
+
+/* Compact student table: one line per student, every column visible */
+table.dense th, table.dense td { padding: 9px 8px; white-space: nowrap; }
+table.dense th:first-child, table.dense td:first-child { padding-left: 16px; }
+table.dense .person { min-width: 0; }
+table.dense .status { padding: 2px 7px; font-size: 12px; }
+table.dense .progress { min-width: 76px; }
+table.dense .button.small { padding: 5px 9px; }

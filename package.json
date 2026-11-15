@@ -15,7 +15,8 @@
     "test": "node --test --test-concurrency=1 server/tests/api.test.js server/tests/realtime.test.js",
     "test:server": "node server/tests/e2e-server.js",
     "test:e2e": "playwright test",
-    "dev": "node --watch server/index.js"
+    "dev": "node --watch server/index.js",
+    "create-demo": "node server/createDemoAccounts.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

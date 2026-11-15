@@ -79,6 +79,20 @@ Open http://localhost:5000 and log in as the admin you just created. Then:
 2. Add mentors.
 3. Share the link so students can register.
 
+### Demo data for presentations (optional)
+
+The command below adds demo accounts to your real database:
+
+- A coordinator, three mentors and a demo student.
+- Five batches across different streams and years.
+- 22 sample students with documents.
+
+```bash
+npm run create-demo
+```
+
+The login passwords are saved to `demo-accounts.txt`, which Git ignores. To recreate the sample students, add `-- --reset-samples`. To delete all demo data, add `-- --remove`.
+
 ## 3. Deploy on Render (free)
 
 1. Push this project to GitHub.

@@ -3,3 +3,4 @@ client/dist/
 .env
 test-results/
 playwright-report/
+demo-accounts.txt

@@ -63,7 +63,7 @@ export default function MentorStudents() {
           </EmptyState>
         ) : visible.length === 0 ? <EmptyState icon="search" title="No students match this view" /> : (
           <div className="table-wrap">
-            <table>
+            <table className="dense">
               <thead>
                 <tr>
                   <th>Student</th>
