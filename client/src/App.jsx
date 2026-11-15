@@ -1,75 +1,90 @@
-import { useEffect, useState } from 'react';
-import { Link, Navigate, Route, Routes } from 'react-router-dom';
-import { api } from './api.js';
+import { lazy, Suspense } from 'react';
+import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { Loading } from './components/Bits.jsx';
+import Layout, { PublicLayout } from './components/Layout.jsx';
 import { ToastProvider } from './components/Toast.jsx';
-import Admin from './pages/Admin.jsx';
-import Dashboard from './pages/Dashboard.jsx';
+import { RealtimeProvider } from './context/Realtime.jsx';
+import { homeFor, SessionProvider, useSession } from './context/Session.jsx';
+import { ThemeProvider } from './context/Theme.jsx';
+import About from './pages/About.jsx';
+import AdminAudit from './pages/admin/AdminAudit.jsx';
+import AdminBatches from './pages/admin/AdminBatches.jsx';
+import AdminUsers from './pages/admin/AdminUsers.jsx';
 import Home from './pages/Home.jsx';
 import Login from './pages/Login.jsx';
+import MentorStudent from './pages/mentor/MentorStudent.jsx';
+import MentorStudents from './pages/mentor/MentorStudents.jsx';
+import Notifications from './pages/Notifications.jsx';
+import Profile from './pages/Profile.jsx';
 import Register from './pages/Register.jsx';
+import StudentDashboard from './pages/student/StudentDashboard.jsx';
+import StudentDocument from './pages/student/StudentDocument.jsx';
 
-function savedTheme() {
-  try {
-    const saved = localStorage.getItem('theme');
-    if (saved) return saved;
-  } catch {
-    // Browser storage can be blocked. The system setting is used instead.
-  }
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+// The charts library is large, so it loads only when a coordinator opens the overview.
+const AdminOverview = lazy(() => import('./pages/admin/AdminOverview.jsx'));
+
+// Pages for logged-out visitors. Logged-in users are sent to their own home page.
+function GuestOnly({ children }) {
+  const { user } = useSession();
+  return user ? <Navigate to={homeFor(user)} replace /> : children;
+}
+
+// Logged-in pages. Each can also be limited to some roles.
+function Protected() {
+  const { user } = useSession();
+  return user ? <Layout /> : <Navigate to="/login" replace />;
+}
+
+function Only({ roles }) {
+  const { user } = useSession();
+  return roles.includes(user.role) ? <Outlet /> : <Navigate to={homeFor(user)} replace />;
+}
+
+function AppRoutes() {
+  const { user, loading } = useSession();
+  if (loading) return <div className="boot"><Loading /></div>;
+
+  return (
+    <Routes>
+      <Route element={<PublicLayout />}>
+        <Route path="/" element={<GuestOnly><Home /></GuestOnly>} />
+        <Route path="/about" element={<About />} />
+        <Route path="/login" element={<GuestOnly><Login /></GuestOnly>} />
+        <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
+      </Route>
+      <Route element={<Protected />}>
+        <Route element={<Only roles={['student']} />}>
+          <Route path="/dashboard" element={<StudentDashboard />} />
+          <Route path="/documents/:type" element={<StudentDocument />} />
+        </Route>
+        <Route element={<Only roles={['mentor', 'admin']} />}>
+          <Route path="/mentor" element={<MentorStudents />} />
+          <Route path="/mentor/students/:id" element={<MentorStudent />} />
+        </Route>
+        <Route element={<Only roles={['admin']} />}>
+          <Route path="/admin" element={<Suspense fallback={<Loading />}><AdminOverview /></Suspense>} />
+          <Route path="/admin/users" element={<AdminUsers />} />
+          <Route path="/admin/batches" element={<AdminBatches />} />
+          <Route path="/admin/audit" element={<AdminAudit />} />
+        </Route>
+        <Route path="/notifications" element={<Notifications />} />
+        <Route path="/profile" element={<Profile />} />
+      </Route>
+      <Route path="*" element={<Navigate to={homeFor(user)} replace />} />
+    </Routes>
+  );
 }
 
 export default function App() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [theme, setTheme] = useState(savedTheme);
-
-  // When the site opens, ask the server whether this browser is logged in.
-  useEffect(() => {
-    api('/auth/me').then(setUser).catch(() => setUser(null)).finally(() => setLoading(false));
-  }, []);
-
-  // Apply the light or dark colours and remember the choice.
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    try {
-      localStorage.setItem('theme', theme);
-    } catch {
-      // The theme still works for this visit.
-    }
-  }, [theme]);
-
-  async function logout() {
-    await api('/auth/logout', { method: 'POST' });
-    setUser(null);
-  }
-
-  const home = !user ? '/' : user.role === 'admin' ? '/admin' : '/dashboard';
-
   return (
-    <ToastProvider>
-      <header className="topbar">
-        <Link className="brand" to="/">Document Submission Portal</Link>
-        <div className="account">
-          {user && <span>{user.name} ({user.systemId})</span>}
-          <button className="button secondary" aria-pressed={theme === 'dark'}
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-          </button>
-          {user && <button className="button secondary" onClick={logout}>Log out</button>}
-        </div>
-      </header>
-      <main className="page">
-        {loading ? <div className="skeleton" aria-label="Loading" /> : (
-          <Routes>
-            <Route path="/" element={user ? <Navigate to={home} /> : <Home />} />
-            <Route path="/login" element={user ? <Navigate to={home} /> : <Login onLogin={setUser} />} />
-            <Route path="/register" element={user ? <Navigate to={home} /> : <Register />} />
-            <Route path="/dashboard" element={user?.role === 'student' ? <Dashboard /> : <Navigate to={user ? home : '/login'} />} />
-            <Route path="/admin" element={user?.role === 'admin' ? <Admin /> : <Navigate to={user ? home : '/login'} />} />
-            <Route path="*" element={<Navigate to={home} />} />
-          </Routes>
-        )}
-      </main>
-    </ToastProvider>
+    <ThemeProvider>
+      <ToastProvider>
+        <SessionProvider>
+          <RealtimeProvider>
+            <AppRoutes />
+          </RealtimeProvider>
+        </SessionProvider>
+      </ToastProvider>
+    </ThemeProvider>
   );
 }

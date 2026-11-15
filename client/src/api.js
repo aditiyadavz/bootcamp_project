@@ -1,14 +1,12 @@
-// Helpers for calling the Express API and showing dates and file sizes.
-export async function api(path, options = {}) {
+// Helpers for calling the Express API and for showing dates and sizes.
+export async function api(path, { method = 'GET', body } = {}) {
   const response = await fetch(`/api${path}`, {
-    ...options,
-    headers: options.body ? { 'Content-Type': 'application/json' } : undefined,
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.message || 'Something went wrong. Please try again.');
-  }
+  if (!response.ok) throw new Error(data.message || 'Something went wrong. Please try again.');
   return data;
 }
 
@@ -37,14 +35,25 @@ export function uploadFile(type, file, onProgress) {
   });
 }
 
-export function formatDate(value) {
-  return new Date(value).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const IST = { timeZone: 'Asia/Kolkata' };
+
+export const formatDate = (value) => new Date(value).toLocaleString('en-IN', { ...IST, day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+export const formatDay = (value) => new Date(value).toLocaleDateString('en-IN', { ...IST, day: '2-digit', month: 'short', year: 'numeric' });
+export const formatSize = (bytes) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`);
+
+export function timeAgo(value) {
+  const seconds = Math.round((Date.now() - new Date(value)) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.round(hours / 24);
+  return days < 7 ? `${days} d ago` : formatDay(value);
 }
 
-export function formatDay(value) {
-  return new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
-}
+// Dates from a date box mean the end of that day in India.
+export const endOfDay = (yyyyMmDd) => new Date(`${yyyyMmDd}T23:59:59+05:30`).toISOString();
+export const toDateInput = (value) => (value ? new Date(value).toLocaleDateString('en-CA', IST) : '');
 
-export function formatSize(bytes) {
-  return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+export const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0].toUpperCase()).join('');

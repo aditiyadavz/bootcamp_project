@@ -1,4 +1,5 @@
-// Creates the mentor account in the database. Run once: npm run create-admin
+// Creates the first coordinator (admin) account in the real database. Run once: npm run create-admin
+// After that, the admin adds mentors, batches and other admins from the website.
 import 'dotenv/config';
 import { stdin as input, stdout as output } from 'node:process';
 import { createInterface } from 'node:readline/promises';
@@ -12,13 +13,13 @@ if (!process.env.MONGODB_URI) {
 }
 
 const prompt = createInterface({ input, output });
-const systemId = (await prompt.question('Mentor login ID: ')).trim();
-const name = (await prompt.question('Mentor name: ')).trim();
+const systemId = (await prompt.question('Admin login ID: ')).trim();
+const name = (await prompt.question('Admin name: ')).trim();
 const password = await prompt.question('Password (at least 8 characters): ');
 prompt.close();
 
-if (!systemId || !name || password.length < 8) {
-  console.error('Please enter an ID, a name and a password of at least 8 characters.');
+if (!/^[A-Za-z0-9_-]{3,30}$/.test(systemId) || !name || password.length < 8) {
+  console.error('Please enter an ID of 3 to 30 letters or numbers, a name, and a password of at least 8 characters.');
   process.exit(1);
 }
 
@@ -27,6 +28,6 @@ if (await User.exists({ systemId })) {
   console.error('This login ID already exists.');
 } else {
   await User.create({ systemId, name, passwordHash: await bcrypt.hash(password, 10), role: 'admin' });
-  console.log('Mentor account created.');
+  console.log('Admin account created. You can now log in on the website.');
 }
 await mongoose.disconnect();

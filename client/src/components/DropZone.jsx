@@ -1,11 +1,12 @@
 // Drag and drop area that checks the file, then uploads it with a progress bar.
 import { useRef, useState } from 'react';
 import { formatSize, uploadFile } from '../api.js';
+import Icon from './Icon.jsx';
 import { useToast } from './Toast.jsx';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
-export default function DropZone({ type, label, replacing, onUploaded }) {
+export default function DropZone({ type, label, replacing, onUploaded, compact }) {
   const [file, setFile] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState(null); // null means not uploading.
@@ -32,7 +33,7 @@ export default function DropZone({ type, label, replacing, onUploaded }) {
       setProgress(null);
       clear();
       showToast(message);
-      await onUploaded();
+      await onUploaded?.();
     } catch (problem) {
       setProgress(null);
       showToast(problem.message, 'error');
@@ -41,41 +42,44 @@ export default function DropZone({ type, label, replacing, onUploaded }) {
 
   if (progress !== null) {
     return (
-      <div className="dropzone uploading">
-        <p>Uploading {file.name}</p>
+      <div className={`dropzone busy ${compact ? 'compact' : ''}`}>
+        <p className="file-name">Uploading {file?.name}</p>
         <div className="bar" role="progressbar" aria-valuenow={progress} aria-valuemin="0" aria-valuemax="100" aria-label="Upload progress">
           <span style={{ width: `${progress}%` }} />
         </div>
-        <p className="hint">{progress}%</p>
+        <p className="muted small">{progress}%</p>
       </div>
     );
   }
 
   if (file) {
     return (
-      <div className="dropzone chosen">
-        <p className="file-name">{file.name}</p>
-        <p className="hint">{formatSize(file.size)}</p>
-        <div className="row">
-          <button className="button" onClick={upload}>{replacing ? 'Replace file' : 'Upload'}</button>
-          <button className="button ghost" onClick={clear}>Cancel</button>
-        </div>
+      <div className={`dropzone chosen ${compact ? 'compact' : ''}`}>
+        <Icon name="file" size={22} />
+        <span className="chosen-text">
+          <strong className="file-name">{file.name}</strong>
+          <span className="muted small">{formatSize(file.size)}</span>
+        </span>
+        <span className="row">
+          <button className="button small" onClick={upload}><Icon name="upload" size={15} /> {replacing ? 'Upload new version' : 'Upload'}</button>
+          <button className="button small ghost" onClick={clear}>Cancel</button>
+        </span>
       </div>
     );
   }
 
   return (
     <label
-      className={`dropzone ${dragging ? 'dragging' : ''}`}
+      className={`dropzone ${dragging ? 'dragging' : ''} ${compact ? 'compact' : ''}`}
       onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
       onDragLeave={() => setDragging(false)}
       onDrop={(event) => { event.preventDefault(); setDragging(false); choose(event.dataTransfer.files[0]); }}
     >
-      <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 16V5M7 10l5-5 5 5M5 19h14" />
-      </svg>
-      <span><strong>{replacing ? 'Drop a new PDF' : 'Drop your PDF here'}</strong> or click to browse</span>
-      <span className="hint">PDF only, up to 5 MB</span>
+      <span className="drop-icon"><Icon name="upload" size={20} /></span>
+      <span className="drop-text">
+        <strong>{replacing ? 'Drop a new version' : 'Drop your PDF here'}</strong>
+        <span className="muted small">or click to browse &middot; PDF only, up to 5 MB</span>
+      </span>
       <input ref={input} className="visually-hidden" type="file" accept=".pdf,application/pdf"
         aria-label={`Choose ${label} PDF`} onChange={(event) => choose(event.target.files[0])} />
     </label>

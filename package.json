@@ -4,18 +4,22 @@
   "description": "MERN web application for submitting and reviewing student documents",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "npm install --include=dev --prefix client && npm run build --prefix client",
     "start": "node server/index.js",
-    "dev:server": "node --watch server/index.js",
     "dev:client": "npm run dev --prefix client",
-    "demo": "node server/demo.js",
     "create-admin": "node server/createAdmin.js",
-    "test": "node --test server/tests/app.test.js"
+    "test": "node --test --test-concurrency=1 server/tests/api.test.js server/tests/realtime.test.js",
+    "test:server": "node server/tests/e2e-server.js",
+    "test:e2e": "playwright test",
+    "dev": "node --watch server/index.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
+    "cookie": "^1.1.1",
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.2.0",
     "express": "^5.1.0",
@@ -23,10 +27,15 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.16.0",
-    "multer": "^2.0.1"
+    "multer": "^2.0.1",
+    "socket.io": "^4.8.4",
+    "swagger-ui-express": "^5.0.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "mongodb-memory-server": "^10.1.4",
+    "socket.io-client": "^4.8.4",
     "supertest": "^7.1.1"
   }
 }

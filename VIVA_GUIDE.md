@@ -1,174 +1,160 @@
 # Viva Guide
 
-Read this aloud a few times, then open the code files named below so you can explain them yourself.
+Practise these answers out loud, then open the files named below and explain them in your own words.
 
-## Your 30-second explanation
+## Your one-minute explanation
 
-"I built a Student Document Submission Portal using the MERN stack and cloud services. Students upload three PDF documents and see whether each is pending, approved or rejected. A mentor reviews them on a dashboard and can leave a comment. The app runs on Render, which is a Platform as a Service, and the data and files are stored in MongoDB Atlas. It uses free plans, so it costs nothing to run."
+"SubmitTrack is a full stack cloud application for internship document submission, built with the MERN stack. It has three roles:
+
+- Students upload their three documents and track each decision.
+- Mentors review only their assigned students' files, and approve or reject them with feedback.
+- Coordinators create batches and deadlines, assign mentors, and see live analytics.
+
+Decisions and messages arrive instantly through WebSockets. The app runs on Render, which is a Platform as a Service, and the data and PDF files are stored in MongoDB Atlas. Every push to GitHub runs automated tests in GitHub Actions, and Render deploys only if they pass. It all runs on free plans."
+
+## Demo order (about 5 minutes)
+
+1. **Home and About pages:** the three roles, and the architecture.
+2. **Coordinator:**
+   - Show the Overview charts.
+   - Create a batch.
+   - Add a mentor and assign a student to them.
+   - Export the CSV.
+3. **Live update, using two windows:**
+   - Log in as the student in one window and the mentor in the other.
+   - The student uploads a file, and the mentor gets a pop-up instantly.
+   - The mentor rejects it with feedback, and the student sees it instantly.
+4. **Student's document page:** versions, preview and the message thread.
+5. **Plagiarism rule:** approving at 12% similarity is refused, and 6% works.
+6. **Audit log, API docs, dark mode and phone layout.**
+7. **GitHub Actions page:** show the green checks.
 
 ## How a request flows
 
-Example: a student uploads a report.
+When a mentor rejects a document:
 
-1. **React** (`Dashboard.jsx`) sends the file to the API.
-2. **Express** (`routes/documents.js`) checks that the student is logged in.
-3. It checks the deadline, that the file isn't already approved, the 5 MB size limit, and that it is really a PDF.
-4. **GridFS** (`fileStorage.js`) saves the PDF in MongoDB Atlas.
-5. A **document record** is saved with the status Pending.
-6. React reloads the list and shows the new status.
+1. **React:** `MentorStudent.jsx` sends `PATCH /api/mentor/documents/:id`.
+2. **Login check:** `requireLogin` reads the JWT cookie, and `requireRole` allows only mentors and coordinators.
+3. **Validation:** Zod (`validate.js`) checks the request body.
+4. **Access check:** `canAccessStudent` checks that this mentor is assigned to the student.
+5. **Saving:** the route saves the status, adds a history entry and the comment, and writes the audit log.
+6. **Notifying:** `notify()` saves a notification and pushes it to the student's Socket.IO room.
+7. **Live update:** the student's browser shows a pop-up, and `useLiveData` reloads the page data.
 
 ## Likely questions
 
-### About the project
+### Architecture and cloud
 
-**Why did you build this?**
-Our department's submission process involves several people, and its notice doesn't describe a way to see whether a document was accepted. The portal shows this clearly.
+**Which cloud service models does the project use?**
+- Render is PaaS: I give it code, and it runs and scales it.
+- MongoDB Atlas is a managed database, often called DBaaS.
+- GitHub Actions is a hosted CI service.
+- It all runs on the public cloud.
 
-**What are the two user roles?**
-Student and admin (the mentor). The role is stored in the user's record and is checked on the server.
+**Why store PDFs in the database instead of on the server?**
+Render's free disk is temporary: files are lost when the service restarts or redeploys. GridFS stores each file in MongoDB Atlas in small chunks, so the files stay safe.
 
-**Does the college actually use it?**
-No. It is a working proof of concept built for this internship.
+**What is CI/CD here?**
+On every push, GitHub Actions runs four checks:
 
-**What are its limitations?**
-It sleeps when idle, has 0.5 GB of free storage, sends no email reminders, and doesn't verify System IDs against university records.
+1. Installs the packages and builds the site.
+2. Runs 36 API and real-time tests.
+3. Runs 9 browser tests.
+4. Builds the Docker image.
 
-### About the cloud
+Render is set to "deploy after checks pass" in `render.yaml`, so broken code never goes live.
 
-**What is cloud computing?**
-Using computing resources such as servers and storage over the internet, when needed, instead of owning the hardware.
-
-**What is the difference between IaaS, PaaS and SaaS?**
-- **IaaS:** you rent virtual machines and manage the operating system. Example: AWS EC2.
-- **PaaS:** you give your code and the provider runs it. Example: Render.
-- **SaaS:** you simply use a finished application. Example: Gmail.
-
-**Which models does your project use?**
-Render is PaaS. MongoDB Atlas is a managed database, often called DBaaS. It runs on the public cloud deployment model.
-
-**Why did you store the PDFs in the database instead of on the server's disk?**
-Render's free disk is temporary. Files on it are lost whenever the service restarts or redeploys. Atlas keeps them safe.
-
-**What is GridFS?**
-A MongoDB feature that stores files by splitting them into small chunks. The details are in `pdfs.files` and the pieces are in `pdfs.chunks`.
-
-**How does deployment work?**
-I push code to GitHub. Render takes it, runs the build command, then starts the app. It gives me a public HTTPS link.
-
-**What is an environment variable, and why use one?**
-It is a setting kept outside the code. The database password and JWT secret are kept there, so they never end up on GitHub.
+**What is `render.yaml`?**
+Infrastructure as code. It describes the service: free plan, Singapore region, build and start commands, health check path and settings. Render creates the service from this file.
 
 **What does the health check do?**
-`/api/health` reports whether the database is connected. Render uses it to check that the app is working.
+`/api/health` reports whether the database is connected. Render uses it to decide whether a new version is healthy.
 
-**Why is the first load sometimes slow?**
-Render's free plan puts the service to sleep after 15 minutes without traffic, and it takes about a minute to wake up.
+**How do deadline reminders work?**
+A scheduled GitHub Actions job (`reminders.yml`) runs every day at 09:00 IST. It calls `/api/reminders/run` with a secret key. The server reminds students whose deadline is within 3 days and who still have documents to submit, at most once a day.
 
-**Why does Atlas allow access from `0.0.0.0/0`?**
-Render's free plan has no fixed address, so I can't list just one. This is a limitation, and a strong password protects the database. A paid plan could restrict it.
+**Why Docker if Render runs Node directly?**
+The Dockerfile makes the app portable to any container platform, such as AWS, Azure or Google Cloud. The two-stage build first builds the React site, then copies only what is needed into a small image that runs as a non-root user. CI checks that the image builds and starts.
 
-**How would you scale it?**
-Move to paid Render and Atlas plans, run more app instances, and move the PDFs to object storage such as Amazon S3.
+**What are the limits of the free plans?**
+- **Render:** sleeps after 15 minutes without visitors and takes about a minute to wake.
+- **Atlas:** 0.5 GB of storage, which is why only the last 5 versions of each file are kept.
 
-### About the MERN stack
+### Real-time updates
 
-**What does MERN stand for?**
-MongoDB (database), Express (backend framework), React (frontend) and Node.js (runs JavaScript on the server).
+**How do instant updates work?**
+Socket.IO keeps a WebSocket connection open between the browser and the server. When a user connects, the server checks the same JWT cookie used for login and puts them in a room named after their user ID. To notify someone, the server sends a message to their room.
 
-**What is an API?**
-A set of addresses the frontend calls to get or change data, such as `POST /api/auth/login`.
+**Why WebSockets and not refreshing every few seconds?**
+Polling wastes requests and still has a delay. WebSockets push changes the moment they happen.
 
-**What do GET, POST and PATCH mean?**
-GET reads data, POST creates data, and PATCH changes part of existing data.
+### Security
 
-**What is a React component and state?**
-A component is a reusable piece of the page, such as `DocumentCard`. State is data that makes the page update when it changes, set with `useState`.
+**How are passwords stored?**
+As bcrypt hashes. A hash can't be turned back into the password.
 
-**What does `useEffect` do?**
-It runs code after a component appears. I use it to load data from the API.
+**How does login work?**
+A signed JWT is stored in an HttpOnly cookie:
 
-**What is middleware?**
-A function that runs before a route. `requireLogin` checks the user is logged in, and `requireRole` checks they have the right role.
+- **Signed:** it can't be faked.
+- **HttpOnly:** page scripts can't read it.
+- **Secure:** it is sent only over HTTPS when live.
+- **SameSite=Lax:** other websites can't use it in form submissions.
 
-**What is Mongoose?**
-A library that defines the shape of the data as models, such as `User` and `Document`, and makes database queries simple.
+**How are roles enforced?**
+On the server, with `requireRole('mentor', 'admin')`. Hiding buttons in React isn't security, so every route checks again.
 
-**Why MongoDB and not SQL?**
-Its flexible JSON-like documents work naturally with JavaScript, and Atlas has a free managed plan. A SQL database would also have worked.
+**What is input validation?**
+Zod checks every request body. This also blocks NoSQL injection, where someone sends `{ "$ne": null }` instead of a System ID.
 
-### About the interactive features
+**What else protects the app?**
+- **Helmet:** adds security headers.
+- **Rate limiting:** limits login attempts to 20 in 15 minutes.
+- **File check:** reads a file's first bytes (`%PDF-`), not only its name.
+- **CSV export:** cells starting with `=` are made safe, so they can't run as spreadsheet formulas.
+- **Secret key comparison:** the reminder key is compared in constant time.
 
-**How does a decision appear without refreshing?**
-The student's page asks the server for new data every 15 seconds. This is called polling. If a status has changed, it shows a pop-up. See `load` and `setInterval` in `Dashboard.jsx`.
+### Database
 
-**Why polling and not WebSockets?**
-Polling is simple and enough here, because a 15-second delay doesn't matter. WebSockets would make it instant, and that is in my future scope.
+**What collections are there?**
+users, batches, documents, comments, notifications and auditlogs, plus GridFS's `pdfs.files` and `pdfs.chunks`.
 
-**How does the countdown work?**
-`Countdown.jsx` uses `setInterval` to update the time every second. React redraws the numbers when the state changes. `clearInterval` stops the timer when the page closes.
+**How are versions kept?**
+Each document has a `versions` array. A new upload adds version n+1. After 5 versions, the oldest file is deleted from GridFS.
 
-**How does drag and drop work?**
-`DropZone.jsx` listens for the browser's `onDragOver` and `onDrop` events and reads the file from `event.dataTransfer.files`.
+**What does `toPublic()` do?**
+It shapes a document for the browser and leaves out internal file IDs.
 
-**How does the upload progress bar work?**
-`fetch` can't report upload progress, so `uploadFile` in `api.js` uses `XMLHttpRequest`, and its `upload.onprogress` event gives the percentage.
+### Frontend
 
-**You check the file in the browser. Why check it on the server too?**
-Browser checks only give quick feedback, and they can be bypassed. The server check is the one that protects the system.
+**How are pages protected?**
+`App.jsx` wraps routes in `Protected` (must be logged in) and `Only roles={[...]}` (must have the right role).
 
-**How does the progress ring work?**
-`ProgressRing.jsx` draws an SVG circle. `strokeDasharray` sets how much of the circle is filled, based on approved documents out of three.
+**What is `useLiveData`?**
+A custom hook. It loads data from the API and loads it again whenever the real-time "changed" message arrives.
 
-**How do the mentor's filters work?**
-Each summary card has a rule in `FILTERS` in `Admin.jsx`. The page uses `.filter()` with that rule and the search text. No extra server request is needed.
+**What is React Context used for?**
+To share three things across all pages: the login session, the live connection with its unread count, and the theme.
 
-**How does the activity history work?**
-Each upload and review adds an entry to the document's `history` array in MongoDB using `$push`. The page lists the entries, newest first.
+**Why is the Overview page loaded separately?**
+The charts library is large. `React.lazy` loads it only when a coordinator opens that page, so other pages load faster.
 
-**How does dark mode work?**
-All colours are CSS variables. Dark mode sets `data-theme="dark"` on the page, which changes those variables. The choice is saved in `localStorage`.
-
-**What is a toast?**
-A small pop-up message that disappears by itself. `Toast.jsx` uses React Context, so any page can show one.
-
-### About security
-
-**How do you protect passwords?**
-They are hashed with bcrypt. A hash can't be turned back into the password. At login, bcrypt compares the typed password with the stored hash.
-
-**What is a JWT?**
-A signed token that proves who the user is. The server creates it at login, and the signature shows it hasn't been changed.
-
-**Why keep it in an HttpOnly cookie?**
-Scripts on the page can't read it, which reduces the risk if a script is injected.
-
-**How do you stop a student opening someone else's file?**
-The download route compares the file's owner with the logged-in user. If they don't match and the user isn't a mentor, it returns 403 Access denied.
-
-**How do you check an upload is really a PDF?**
-I check that the name ends in `.pdf` and that the first bytes of the file are `%PDF-`, because a name alone can be faked.
-
-**What is NoSQL injection, and how do you prevent it?**
-It is sending a database command instead of normal text at login. I convert the input with `String()`, and test 6 confirms this attack fails.
-
-### About testing
+### Testing
 
 **How did you test it?**
-I have 24 automatic tests using Node's test runner and Supertest, with a temporary database. I also ran 31 scripted checks in a real browser, including a student and a mentor logged in at the same time.
+In three layers:
 
-**Did testing find any bugs?**
-Yes, two. The page could crash when an upload finished, and an old comment stayed in the mentor's box after a student uploaded a new file. Both were fixed.
+1. **36 API and real-time tests:** Node's test runner and Supertest, with an in-memory MongoDB.
+2. **9 browser tests:** Playwright, including two users at once to prove live updates.
+3. **Production build simulation:** checks Render's exact build command.
 
-**Show me the tests.**
-Run `npm test`. They should all pass.
+**Why a temporary database for tests?**
+So tests never change real data, and each test starts clean.
 
 ## Before the viva
 
-- [ ] Run the app and go through the whole journey yourself.
-- [ ] Open each file in `server/routes` and explain it out loud.
-- [ ] Open `Dashboard.jsx` and explain `load`, `useEffect` and `setInterval`.
-- [ ] Open `DropZone.jsx` and explain how a file gets uploaded.
-- [ ] Practise showing the live update with two browser windows.
-- [ ] Run `npm test`.
-- [ ] Open the live link early so the service has time to wake up.
-- [ ] Keep `npm run demo` ready in case the internet fails.
+- [ ] Deploy and open your live link a minute early.
+- [ ] Practise the two-window live demo.
+- [ ] Run `npm test` and `npm run test:e2e` once.
+- [ ] Open `server/routes/mentor.js`, `server/lib/realtime.js` and `client/src/context/Realtime.jsx` and explain them.
+- [ ] Keep `npm run test:server` ready as a backup if the internet fails.

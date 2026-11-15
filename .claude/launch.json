@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "portal-demo",
+      "name": "portal-test-server",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["server/demo.js"],
-      "port": 5000
+      "runtimeArgs": ["server/tests/e2e-server.js"],
+      "port": 5100
     }
   ]
 }

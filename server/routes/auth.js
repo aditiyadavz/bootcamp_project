@@ -1,12 +1,16 @@
-// Register, log in, log out, and "who am I?".
+// Register, log in, log out, "who am I?", and profile changes.
 import bcrypt from 'bcryptjs';
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
+import { audit } from '../lib/audit.js';
+import { deadlineFor } from '../lib/access.js';
 import { clearLoginCookie, requireLogin, setLoginCookie } from '../middleware/auth.js';
+import { objectId, password, systemId, text, validate } from '../middleware/validate.js';
+import Batch from '../models/Batch.js';
 import User from '../models/User.js';
 
 const router = Router();
-const publicUser = (user) => ({ systemId: user.systemId, name: user.name, role: user.role });
 
 // Slows down anyone trying to guess passwords.
 const loginLimiter = rateLimit({
@@ -15,31 +19,50 @@ const loginLimiter = rateLimit({
   message: { message: 'Too many attempts. Please try again later.' },
 });
 
-router.post('/register', async (req, res) => {
-  // String() stops someone sending a database query instead of plain text.
-  const systemId = String(req.body.systemId ?? '').trim();
-  const name = String(req.body.name ?? '').trim();
-  const password = String(req.body.password ?? '');
+const registerSchema = z.object({
+  systemId,
+  name: text('your name', 80),
+  password,
+  batch: objectId.optional().or(z.literal('')),
+});
 
-  if (!systemId || !name) return res.status(400).json({ message: 'Please enter your System ID and name.' });
-  if (password.length < 8) return res.status(400).json({ message: 'Password must have at least 8 characters.' });
-  if (await User.exists({ systemId })) return res.status(409).json({ message: 'This System ID is already registered.' });
+const loginSchema = z.object({
+  systemId: z.string({ error: 'Please enter your System ID.' }).trim().min(1, 'Please enter your System ID.'),
+  password: z.string({ error: 'Please enter your password.' }).min(1, 'Please enter your password.'),
+});
 
-  const passwordHash = await bcrypt.hash(password, 10);
-  await User.create({ systemId, name, passwordHash });
+export async function profileOf(user) {
+  await user.populate([{ path: 'batch', select: 'name deadline' }, { path: 'mentor', select: 'name systemId' }]);
+  return {
+    id: user.id,
+    systemId: user.systemId,
+    name: user.name,
+    role: user.role,
+    batch: user.batch,
+    mentor: user.mentor,
+    deadline: user.role === 'student' ? await deadlineFor(user) : null,
+    extendedDeadline: user.extendedDeadline,
+  };
+}
+
+router.post('/register', loginLimiter, validate(registerSchema), async (req, res) => {
+  const { systemId: id, name, password: plain, batch } = req.body;
+  if (await User.exists({ systemId: id })) return res.status(409).json({ message: 'This System ID is already registered.' });
+  if (batch && !(await Batch.exists({ _id: batch }))) return res.status(400).json({ message: 'Please choose a valid batch.' });
+
+  const user = await User.create({ systemId: id, name, passwordHash: await bcrypt.hash(plain, 10), batch: batch || null });
+  await audit(user, 'Registered', 'Student account created');
   res.status(201).json({ message: 'Account created. Please log in.' });
 });
 
-router.post('/login', loginLimiter, async (req, res) => {
-  const systemId = String(req.body.systemId ?? '').trim();
-  const password = String(req.body.password ?? '');
-
-  const user = await User.findOne({ systemId });
-  if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+router.post('/login', loginLimiter, validate(loginSchema), async (req, res) => {
+  const user = await User.findOne({ systemId: req.body.systemId });
+  if (!user || !(await bcrypt.compare(req.body.password, user.passwordHash))) {
     return res.status(401).json({ message: 'Wrong System ID or password.' });
   }
+  if (!user.active) return res.status(403).json({ message: 'This account has been deactivated. Please contact the coordinator.' });
   setLoginCookie(res, user);
-  res.json(publicUser(user));
+  res.json(await profileOf(user));
 });
 
 router.post('/logout', (req, res) => {
@@ -47,6 +70,27 @@ router.post('/logout', (req, res) => {
   res.json({ message: 'Logged out.' });
 });
 
-router.get('/me', requireLogin, (req, res) => res.json(publicUser(req.user)));
+router.get('/me', requireLogin, async (req, res) => res.json(await profileOf(req.user)));
+
+router.patch('/me', requireLogin, validate(z.object({ name: text('your name', 80) })), async (req, res) => {
+  req.user.name = req.body.name;
+  await req.user.save();
+  res.json(await profileOf(req.user));
+});
+
+const passwordSchema = z.object({
+  currentPassword: z.string({ error: 'Please enter your current password.' }).min(1, 'Please enter your current password.'),
+  newPassword: password,
+});
+
+router.post('/password', requireLogin, validate(passwordSchema), async (req, res) => {
+  if (!(await bcrypt.compare(req.body.currentPassword, req.user.passwordHash))) {
+    return res.status(400).json({ message: 'Your current password is wrong.' });
+  }
+  req.user.passwordHash = await bcrypt.hash(req.body.newPassword, 10);
+  await req.user.save();
+  await audit(req.user, 'Changed password');
+  res.json({ message: 'Password changed.' });
+});
 
 export default router;

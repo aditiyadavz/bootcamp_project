@@ -1,0 +1,20 @@
+# Runs the app and its own MongoDB database in containers: docker compose up --build
+# Then open http://localhost:5000 and create the first admin with:
+#   docker compose exec app node server/createAdmin.js
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      MONGODB_URI: mongodb://database:27017/portal
+      JWT_SECRET: ${JWT_SECRET:-change-this-long-random-text}
+      CRON_SECRET: ${CRON_SECRET:-change-this-other-random-text}
+    depends_on:
+      - database
+  database:
+    image: mongo:7
+    volumes:
+      - portal-data:/data/db
+volumes:
+  portal-data:

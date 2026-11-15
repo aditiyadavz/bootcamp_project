@@ -1,0 +1,23 @@
+# Render Blueprint: describes the cloud deployment as code.
+# In Render choose New > Blueprint and pick this repository; Render reads this file.
+services:
+  - type: web
+    name: submittrack
+    runtime: node
+    plan: free
+    region: singapore # Closest Render region to India.
+    buildCommand: npm install --omit=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeployTrigger: checksPass # Deploy only after the GitHub Actions checks pass.
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: JWT_SECRET
+        generateValue: true # Render creates a long random secret.
+      - key: MONGODB_URI
+        sync: false # You paste your Atlas connection string when creating the service.
+      - key: CRON_SECRET
+        sync: false # Use the same value as the CRON_SECRET secret in GitHub.

@@ -12,15 +12,15 @@ function strengthOf(password) {
 
 const LABELS = ['Too short', 'Weak', 'Okay', 'Good', 'Strong'];
 
-export default function PasswordInput({ value, onChange, showStrength, minLength }) {
+export default function PasswordInput({ value, onChange, showStrength, minLength, id = 'password', name = 'password', label = 'Password', autoComplete = 'current-password' }) {
   const [visible, setVisible] = useState(false);
   const score = strengthOf(value);
 
   return (
-    <div className="password">
-      <label htmlFor="password">Password</label>
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
       <div className="password-box">
-        <input id="password" name="password" type={visible ? 'text' : 'password'} value={value}
+        <input id={id} name={name} type={visible ? 'text' : 'password'} value={value} autoComplete={autoComplete}
           onChange={onChange} minLength={minLength} required />
         <button type="button" className="link-button" aria-pressed={visible} onClick={() => setVisible(!visible)}>
           {visible ? 'Hide' : 'Show'}
@@ -29,7 +29,7 @@ export default function PasswordInput({ value, onChange, showStrength, minLength
       {showStrength && value && (
         <div className="strength" data-score={score}>
           <div className="strength-bar"><span style={{ width: `${(score / 4) * 100}%` }} /></div>
-          <span className="hint">{LABELS[score]}</span>
+          <span className="muted small">{LABELS[score]}</span>
         </div>
       )}
     </div>

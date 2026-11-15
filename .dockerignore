@@ -1,0 +1,12 @@
+node_modules
+client/node_modules
+client/dist
+.env
+.git
+.github
+report
+test-results
+playwright-report
+e2e
+server/tests
+*.md

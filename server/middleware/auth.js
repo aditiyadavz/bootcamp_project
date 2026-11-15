@@ -26,13 +26,14 @@ export async function requireLogin(req, res, next) {
   } catch {
     req.user = null;
   }
-  if (!req.user) return res.status(401).json({ message: 'Please log in.' });
+  if (!req.user?.active) return res.status(401).json({ message: 'Please log in.' });
   next();
 }
 
-export function requireRole(role) {
+// Allows only the listed roles, for example requireRole('mentor', 'admin').
+export function requireRole(...roles) {
   return (req, res, next) => {
-    if (req.user.role !== role) return res.status(403).json({ message: 'Access denied.' });
+    if (!roles.includes(req.user.role)) return res.status(403).json({ message: 'Access denied.' });
     next();
   };
 }
